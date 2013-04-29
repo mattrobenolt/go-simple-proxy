@@ -7,19 +7,21 @@ import (
     "sync"
 )
 
-// Map to hold all responses
-// Queue is mapped based on request path naiively
-var responseQueue map[string][]chan []byte
+var (
+    // Map to hold all responses
+    // Queue is mapped based on request path naiively
+    responseQueue = map[string][]chan []byte{}
 
-// Total number of origin fetches
-var numFetches int
+    // Total number of origin fetches
+    numFetches = 0
 
-// Total number of requests
-var numRequests int
+    // Total number of requests
+    numRequests = 0
+)
 
 func fetchURL(path string) {
     numFetches++
-    fmt.Printf("fetching %s %d\n", path, numFetches)
+    // fmt.Printf("fetching %s %d\n", path, numFetches)
     client := &http.Client{}
     req, err := http.NewRequest("GET", "http://75.101.142.194" + path, nil)
     req.Host = "httpbin.org"
@@ -47,7 +49,7 @@ func fetchURL(path string) {
 
 func handler(w http.ResponseWriter, r *http.Request) {
     numRequests++
-    fmt.Printf("%d requests\n", numRequests)
+    // fmt.Printf("%d requests\n", numRequests)
 
     // Start with a new response channel
     ch := make(chan []byte)
@@ -56,9 +58,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
     // Lock down the map while we manipulate it
     mutex := new(sync.Mutex)
     mutex.Lock()
-    if _, ok := responseQueue[path]; ok {
+    if queue, ok := responseQueue[path]; ok {
         // A queue already exists, just append this channel to it
-        responseQueue[path] = append(responseQueue[path], ch)
+        queue = append(queue, ch)
     } else {
         // No queue, create one with your channel already in it
         queue := []chan []byte{ch}
@@ -67,16 +69,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
         go fetchURL(path)
     }
     mutex.Unlock()
-    // Wait until the body has been fetched
-    body := <- ch
     // Write out the response
-    fmt.Fprintf(w, "%s", body)
+    fmt.Fprintf(w, "%s", <- ch)
 }
 
 func main() {
-    responseQueue = make(map[string][]chan []byte)
-    numFetches = 0
-    numRequests = 0
     http.HandleFunc("/", handler)
     http.ListenAndServe(":6081", nil)
 }
