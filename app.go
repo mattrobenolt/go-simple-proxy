@@ -5,7 +5,13 @@ import (
     "io/ioutil"
     "net/http"
     "sync"
+    "encoding/json"
 )
+
+type Stats struct {
+    NumFetches int
+    NumRequests int
+}
 
 var (
     // Map to hold all responses
@@ -17,11 +23,13 @@ var (
 
     // Total number of requests
     numRequests = 0
+
+    stats = Stats{}
 )
 
 func fetchURL(path string) {
-    numFetches++
-    // fmt.Printf("fetching %s %d\n", path, numFetches)
+    stats.NumFetches++
+
     client := &http.Client{}
     req, err := http.NewRequest("GET", "http://75.101.142.194" + path, nil)
     req.Host = "httpbin.org"
@@ -47,9 +55,8 @@ func fetchURL(path string) {
     }
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-    numRequests++
-    // fmt.Printf("%d requests\n", numRequests)
+func handleMain(w http.ResponseWriter, r *http.Request) {
+    stats.NumRequests++
 
     // Start with a new response channel
     ch := make(chan []byte)
@@ -73,7 +80,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
     fmt.Fprintf(w, "%s", <- ch)
 }
 
+func handleStats(w http.ResponseWriter, r *http.Request) {
+    b, _ := json.Marshal(stats)
+    fmt.Fprintf(w, "%s", b)
+}
+
 func main() {
-    http.HandleFunc("/", handler)
+    http.HandleFunc("/", handleMain)
+    http.HandleFunc("/stats", handleStats)
     http.ListenAndServe(":6081", nil)
 }
